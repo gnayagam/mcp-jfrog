@@ -1,16 +1,8 @@
-# ⛔ DEPRECATED — JFrog MCP Server (Experimental)
+# JFrog MCP Server (Self-Hosted)
 
-> [!CAUTION]
-> # 🚨 THIS PROJECT IS DEPRECATED AND NO LONGER MAINTAINED 🚨
->
-> **Do not use this repository for new or existing integrations.**
->
-> This experimental MCP server has been **superseded by the official JFrog MCP Server**, which is built, maintained, and supported by JFrog. The official server is secure, remotely hosted, production-ready, and receives ongoing updates, bug fixes, and security patches.
->
-> ### 👉 Use the official JFrog MCP Server instead:
-> ### **[https://jfrog.com/help/r/jfrog-integrations-documentation/jfrog-mcp-server](https://jfrog.com/help/r/jfrog-integrations-documentation/jfrog-mcp-server)**
->
-> No further features, fixes, or security updates will be delivered to this repository. Any content below is preserved for historical reference only.
+> [!IMPORTANT]
+> This repository is maintained as a self-hosted MCP server for internal use.
+> It originated from an upstream experimental project, but this fork is intended for active deployment and customization.
 
 ---
 
@@ -22,17 +14,10 @@ Model Context Protocol (MCP) Server for the JFrog Platform API, enabling reposit
 https://github.com/user-attachments/assets/aca3af2b-f294-41c8-8727-799a019a55b5
 
 
-## ⚠️ Deprecation Notice
+## Fork Notice
 
-**This project is deprecated and is no longer maintained by JFrog.**
-
-It was originally created as an experimental project to demonstrate JFrog's capabilities with MCP and was never officially supported or verified by JFrog. It will not receive further updates, bug fixes, or security patches.
-
-JFrog now provides an **official, secure, and remotely hosted MCP server** for seamless integration with the JFrog Platform. The managed MCP server is maintained by JFrog and is the recommended and only supported option going forward, offering enhanced security, reliability, and support.
-
-Please migrate to the official server:
-
-👉 **[JFrog MCP Server — Official Documentation](https://jfrog.com/help/r/jfrog-integrations-documentation/jfrog-mcp-server)**
+This codebase was originally based on an upstream experimental MCP server.
+Deprecation statements from upstream do not apply to this self-hosted fork.
 
 ## Features
 
