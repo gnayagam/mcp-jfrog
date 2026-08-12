@@ -2,6 +2,7 @@ import { getUserAgent } from "universal-user-agent";
 import { createJFrogError } from "./errors.js";
 import { VERSION } from "./version.js";
 import axios, { AxiosRequestConfig, AxiosResponse } from "axios";
+import { getJFrogAuthContext } from "./auth-context.js";
 import {
   JFrogError,
   JFrogValidationError,
@@ -57,18 +58,23 @@ export async function jfrogRequest(
   options: RequestOptions = {},
   postProcess: (data: unknown) => unknown = (x) => x
 ): Promise<unknown> {
+  const context = getJFrogAuthContext();
+  const contextAccessToken = context?.accessToken?.trim();
+  const contextBaseUrl = context?.baseUrl?.trim();
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "User-Agent": USER_AGENT,
     ...options.headers,
   };
 
-  if (process.env.JFROG_ACCESS_TOKEN) {
+  if (contextAccessToken) {
+    headers["Authorization"] = `Bearer ${contextAccessToken}`;
+  } else if (process.env.JFROG_ACCESS_TOKEN) {
     headers["Authorization"] = `Bearer ${process.env.JFROG_ACCESS_TOKEN}`;
   }
 
-
-  const baseUrl = normalizeJFrogBaseUrl(process.env.JFROG_URL || "");
+  const baseUrl = normalizeJFrogBaseUrl(contextBaseUrl || process.env.JFROG_URL || "");
   const path = urlPath.startsWith("/") ? urlPath.substring(1) : urlPath;
   const url = baseUrl ? `${baseUrl}${path}` : urlPath;
 
@@ -82,7 +88,6 @@ export async function jfrogRequest(
 
     const response = await axios(axiosConfig);
     return postProcess(response.data);
-    return response.data;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response) {
       throw createJFrogError(error.response.status, error.response.data);

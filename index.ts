@@ -14,6 +14,7 @@ import {
   isJFrogError,
 } from "./common/errors.js";
 import { VERSION } from "./common/version.js";
+import { JFrogAuthContext, runWithJFrogAuthContext } from "./common/auth-context.js";
 import express from "express";
 import cors from "cors";
 
@@ -58,6 +59,30 @@ function log(level: LogLevel, message: string, meta?: any) {
     const metaStr = meta ? ` ${JSON.stringify(meta)}` : "";
     console.error(`[${timestamp}] [${levelName}] ${message}${metaStr}`);
   }
+}
+
+function parseBearerToken(authHeader?: string): string | undefined {
+  if (!authHeader) {
+    return undefined;
+  }
+
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || undefined;
+}
+
+function extractRequestAuthContext(req: express.Request): JFrogAuthContext {
+  const headerAuth = req.headers["authorization"] as string | undefined;
+  const tokenFromAuthorization = parseBearerToken(headerAuth);
+  const tokenFromHeader = (req.headers["x-jfrog-access-token"] as string | undefined)?.trim();
+  const baseUrl = (req.headers["x-jfrog-url"] as string | undefined)?.trim();
+  const principal = (req.headers["x-user-id"] as string | undefined)?.trim();
+
+  return {
+    accessToken: tokenFromHeader || tokenFromAuthorization,
+    baseUrl,
+    principal,
+    source: "sse-http-headers",
+  };
 }
 
 // Initialize the server
@@ -201,7 +226,7 @@ async function runServer() {
     app.use(cors({
       origin: corsOrigin,
       methods: "GET, POST, OPTIONS",
-      allowedHeaders: "Content-Type, Authorization, x-api-key"
+      allowedHeaders: "Content-Type, Authorization, x-api-key, x-jfrog-access-token, x-jfrog-url, x-user-id"
     }));
     
     // Health check endpoint
@@ -242,7 +267,8 @@ async function runServer() {
       connectedAt: Date,
       isCursorClient: boolean,
       lastActivity: Date,
-      keepAliveInterval: NodeJS.Timeout
+      keepAliveInterval: NodeJS.Timeout,
+      authContext: JFrogAuthContext
     }>();
     
     // Setup SSE endpoint
@@ -264,6 +290,7 @@ async function runServer() {
       // Detect if this is a Cursor MCP client
       const userAgent = req.headers["user-agent"] || "";
       const isCursorClient = userAgent.includes("Cursor") || userAgent.includes("VSCode");
+      const authContext = extractRequestAuthContext(req);
       
       // Set proper headers for SSE (in case SDK transport doesn't set them)
       res.setHeader("X-Accel-Buffering", "no"); // Important for nginx proxies
@@ -274,7 +301,10 @@ async function runServer() {
         remoteAddress: req.ip,
         fromQuery: !!connectionIdFromQuery,
         fromCookie: !!connectionIdFromCookie,
-        isCursorClient
+        isCursorClient,
+        hasRequestToken: !!authContext.accessToken,
+        hasRequestBaseUrl: !!authContext.baseUrl,
+        principal: authContext.principal || "unknown"
       });
       
       // Create transport instance
@@ -303,7 +333,8 @@ async function runServer() {
         connectedAt: new Date(),
         isCursorClient,
         lastActivity: new Date(),
-        keepAliveInterval
+        keepAliveInterval,
+        authContext
       });
       
       // Connect server to transport
@@ -330,7 +361,7 @@ async function runServer() {
     });
     
     // Setup messages endpoint for client-to-server communication
-    app.post("/messages", express.json({ limit: "1mb" }), (req, res) => {
+    app.post("/messages", express.json({ limit: "1mb" }), async (req, res) => {
       // Try to get connectionId from query params first, then from cookies
       let connectionId = req.query.connectionId?.toString();
       
@@ -383,6 +414,14 @@ async function runServer() {
         
         // Update last activity time
         connection.lastActivity = new Date();
+        const requestAuthContext = extractRequestAuthContext(req);
+        const effectiveAuthContext: JFrogAuthContext = {
+          ...connection.authContext,
+          ...requestAuthContext,
+          accessToken: requestAuthContext.accessToken || connection.authContext.accessToken,
+          baseUrl: requestAuthContext.baseUrl || connection.authContext.baseUrl,
+          principal: requestAuthContext.principal || connection.authContext.principal,
+        };
         
         try {
           // Clone the request body to avoid issues with stream handling
@@ -396,11 +435,13 @@ async function runServer() {
             if (typeof transport.onmessage === "function") {
               // Forward the JSON-RPC message directly to the transport's message handler
               const requestId = requestBody.id;
-              transport.onmessage({ 
-                jsonrpc: requestBody.jsonrpc,
-                id: requestId,
-                method: requestBody.method,
-                params: requestBody.params
+              await runWithJFrogAuthContext(effectiveAuthContext, async () => {
+                await transport.onmessage!({ 
+                  jsonrpc: requestBody.jsonrpc,
+                  id: requestId,
+                  method: requestBody.method,
+                  params: requestBody.params
+                });
               });
               
               // Send a default success response
@@ -411,11 +452,15 @@ async function runServer() {
               });
             } else {
               // Fallback to using handlePostMessage if onmessage isn't available
-              connection.transport.handlePostMessage(req, res);
+              await runWithJFrogAuthContext(effectiveAuthContext, async () => {
+                await connection.transport.handlePostMessage(req, res);
+              });
             }
           } else {
             // If it's not a JSON-RPC message, use the standard handler
-            connection.transport.handlePostMessage(req, res);
+            await runWithJFrogAuthContext(effectiveAuthContext, async () => {
+              await connection.transport.handlePostMessage(req, res);
+            });
           }
           
           // Increment message count if property exists
@@ -449,7 +494,7 @@ async function runServer() {
     });
     
     // Special endpoint for Cursor MCP client (compatible with url-based configuration)
-    app.post("/", express.json({ limit: "1mb" }), (req, res) => {
+    app.post("/", express.json({ limit: "1mb" }), async (req, res) => {
       // Find the most recent connection, if any exist
       let mostRecentConnection: { id: string; connection: any } | null = null;
       
@@ -475,6 +520,14 @@ async function runServer() {
         try {
           // Update last activity time
           mostRecentConnection.connection.lastActivity = new Date();
+          const requestAuthContext = extractRequestAuthContext(req);
+          const effectiveAuthContext: JFrogAuthContext = {
+            ...mostRecentConnection.connection.authContext,
+            ...requestAuthContext,
+            accessToken: requestAuthContext.accessToken || mostRecentConnection.connection.authContext.accessToken,
+            baseUrl: requestAuthContext.baseUrl || mostRecentConnection.connection.authContext.baseUrl,
+            principal: requestAuthContext.principal || mostRecentConnection.connection.authContext.principal,
+          };
           
           // IMPORTANT: Clone the request body to avoid issues with stream handling
           const requestBody = JSON.parse(JSON.stringify(req.body));
@@ -490,11 +543,13 @@ async function runServer() {
           if (typeof transport.onmessage === "function") {
             // Forward the JSON-RPC message directly to the transport's message handler
             const requestId = requestBody.id;
-            transport.onmessage({ 
-              jsonrpc: requestBody.jsonrpc,
-              id: requestId,
-              method: requestBody.method,
-              params: requestBody.params
+            await runWithJFrogAuthContext(effectiveAuthContext, async () => {
+              await transport.onmessage!({ 
+                jsonrpc: requestBody.jsonrpc,
+                id: requestId,
+                method: requestBody.method,
+                params: requestBody.params
+              });
             });
             
             // Send a default success response
@@ -505,7 +560,9 @@ async function runServer() {
             });
           } else {
             // Fallback to using handlePostMessage if onmessage isn't available
-            transport.handlePostMessage(req, res);
+            await runWithJFrogAuthContext(effectiveAuthContext, async () => {
+              await transport.handlePostMessage(req, res);
+            });
           }
           
           // Increment message count

@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-jfrog
+  labels:
+    app.kubernetes.io/name: mcp-jfrog
+    app.kubernetes.io/component: server
+spec:
+  selector:
+    app.kubernetes.io/name: mcp-jfrog
+    app.kubernetes.io/component: server
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+  type: ClusterIP

@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mcp-jfrog
+  labels:
+    app.kubernetes.io/name: mcp-jfrog
+    app.kubernetes.io/component: server
+  annotations:
+    kubernetes.io/ingress.class: gce
+    kubernetes.io/ingress.allow-http: "false"
+    # Required for SSE streaming with GCLB/NGINX paths that might otherwise buffer.
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  tls:
+    - hosts:
+        - mcp-jfrog.example.com
+      secretName: mcp-jfrog-tls
+  rules:
+    - host: mcp-jfrog.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: mcp-jfrog
+                port:
+                  number: 80

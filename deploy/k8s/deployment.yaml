@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-jfrog
+  labels:
+    app.kubernetes.io/name: mcp-jfrog
+    app.kubernetes.io/component: server
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mcp-jfrog
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mcp-jfrog
+        app.kubernetes.io/component: server
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: mcp-jfrog
+          image: your-registry/mcp-jfrog:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: mcp-jfrog-config
+          # Optional emergency fallback token for service-level identity.
+          # Prefer per-user identity passed via Authorization or x-jfrog-access-token.
+          env:
+            - name: JFROG_ACCESS_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-jfrog-secrets
+                  key: jfrog_access_token
+                  optional: true
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

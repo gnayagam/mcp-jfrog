@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-jfrog-config
+  labels:
+    app.kubernetes.io/name: mcp-jfrog
+    app.kubernetes.io/component: server
+data:
+  TRANSPORT: "sse"
+  PORT: "8080"
+  LOG_LEVEL: "INFO"
+  # Optional default URL fallback when a client does not send x-jfrog-url.
+  # Per-request x-jfrog-url header takes precedence.
+  JFROG_URL: ""
+  # Restrict this in production to your MCP caller origins.
+  CORS_ORIGIN: "*"

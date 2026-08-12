@@ -259,6 +259,83 @@ To install mcp-jfrog for Claude Desktop automatically via [Smithery](https://smi
 npx -y @smithery/cli install @jfrog/mcp-jfrog --client claude
 ```
 
+## Multi-User Authentication (Per-Developer Identity)
+
+This server now supports per-request identity when running in SSE mode.
+
+- Pass each developer token using either `Authorization: Bearer <token>` or `x-jfrog-access-token: <token>`.
+- Optionally pass `x-jfrog-url: https://your-company.jfrog.io` to select base URL per request.
+- Optional fallback remains available through `JFROG_ACCESS_TOKEN` and `JFROG_URL` env vars.
+
+Header precedence:
+
+1. `x-jfrog-access-token` or `Authorization` for token.
+2. `x-jfrog-url` for JFrog base URL.
+3. Environment defaults (`JFROG_ACCESS_TOKEN`, `JFROG_URL`) if headers are missing.
+
+This allows one shared MCP deployment for many developers while preserving user-level authorization at JFrog.
+
+## Deploy To GKE
+
+Kubernetes manifests are included under `deploy/k8s`:
+
+- `configmap.yaml`
+- `deployment.yaml`
+- `service.yaml`
+- `ingress.yaml`
+- `hpa.yaml`
+- `secret.example.yaml`
+
+### 1) Build and push image
+
+```bash
+docker build -t YOUR_REGISTRY/mcp-jfrog:TAG .
+docker push YOUR_REGISTRY/mcp-jfrog:TAG
+```
+
+Update `deploy/k8s/deployment.yaml` image field to your pushed tag.
+
+### 2) Create namespace and optional secret
+
+```bash
+kubectl create namespace mcp-jfrog
+kubectl apply -n mcp-jfrog -f deploy/k8s/secret.example.yaml
+```
+
+If you want strict per-user identity only, leave `jfrog_access_token` empty.
+
+### 3) Apply manifests
+
+```bash
+kubectl apply -n mcp-jfrog -f deploy/k8s/configmap.yaml
+kubectl apply -n mcp-jfrog -f deploy/k8s/deployment.yaml
+kubectl apply -n mcp-jfrog -f deploy/k8s/service.yaml
+kubectl apply -n mcp-jfrog -f deploy/k8s/hpa.yaml
+kubectl apply -n mcp-jfrog -f deploy/k8s/ingress.yaml
+```
+
+### 4) Verify rollout
+
+```bash
+kubectl rollout status deployment/mcp-jfrog -n mcp-jfrog
+kubectl get pods -n mcp-jfrog
+kubectl get ingress -n mcp-jfrog
+```
+
+### 5) Configure your MCP client
+
+Point your client to SSE endpoint:
+
+- `GET /sse` for event stream.
+- `POST /messages` for JSON-RPC messages.
+
+Include per-user headers on requests:
+
+- `Authorization: Bearer <developer-jfrog-token>`
+- `x-jfrog-url: https://your-company.jfrog.io`
+
+For production, set `CORS_ORIGIN` in `configmap.yaml` to your trusted MCP client origin(s), not `*`.
+
 ### Prerequisites
 
 - Node.js v18 or higher
