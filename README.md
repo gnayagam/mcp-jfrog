@@ -4,6 +4,10 @@
 > This repository is maintained as a self-hosted MCP server for internal use.
 > It originated from an upstream experimental project, but this fork is intended for active deployment and customization.
 
+> [!NOTE]
+> This fork is not the official JFrog-managed MCP service. If you want the JFrog-supported managed offering, use:
+> https://jfrog.com/help/r/jfrog-integrations-documentation/jfrog-mcp-server
+
 ---
 
 [![smithery badge](https://smithery.ai/badge/@jfrog/mcp-jfrog)](https://smithery.ai/server/@jfrog/mcp-jfrog)
@@ -18,6 +22,7 @@ https://github.com/user-attachments/assets/aca3af2b-f294-41c8-8727-799a019a55b5
 
 This codebase was originally based on an upstream experimental MCP server.
 Deprecation statements from upstream do not apply to this self-hosted fork.
+It is a community/self-hosted deployment path and should be maintained by your team.
 
 ## Features
 
